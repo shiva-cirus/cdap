@@ -151,7 +151,8 @@ public class ProvisioningService extends AbstractIdleService {
     LOG.info("Starting {}", getClass().getSimpleName());
     initializeProvisioners();
     this.taskExecutor = new KeyedExecutor<>(Executors.newScheduledThreadPool(
-      0, Threads.createDaemonThreadFactory("provisioning-service-%d")));
+      cConf.getInt(Constants.Provisioner.EXECUTOR_THREADS),
+      Threads.createDaemonThreadFactory("provisioning-service-%d")));
     resumeTasks(taskStateCleanup);
   }
 
@@ -197,7 +198,7 @@ public class ProvisioningService extends AbstractIdleService {
     ProvisionerContext context;
     try {
       DefaultSSHContext defaultSSHContext = null;
-      if (!getRuntimeJobManager(programOptions, programRunId).isPresent()) {
+      if (!getRuntimeJobManager(programRunId, programOptions).isPresent()) {
         defaultSSHContext = new DefaultSSHContext(
           Networks.getAddress(cConf, Constants.NETWORK_PROXY_ADDRESS), null, null);
       }
@@ -364,11 +365,11 @@ public class ProvisioningService extends AbstractIdleService {
   /**
    * Returns runtime job manager implementation.
    *
-   * @param programOptions program options
    * @param programRunId program run
+   * @param programOptions program options
    * @return an object of runtime job manager
    */
-  public Optional<RuntimeJobManager> getRuntimeJobManager(ProgramOptions programOptions, ProgramRunId programRunId) {
+  public Optional<RuntimeJobManager> getRuntimeJobManager(ProgramRunId programRunId, ProgramOptions programOptions) {
     Map<String, String> systemArgs = programOptions.getArguments().asMap();
     Provisioner provisioner = provisionerInfo.get().provisioners.get(SystemArguments.getProfileProvisioner(systemArgs));
     String user = programOptions.getArguments().getOption(ProgramOptionConstants.USER_ID);
@@ -558,13 +559,10 @@ public class ProvisioningService extends AbstractIdleService {
 
     ProvisionerContext context;
     try {
-      DefaultSSHContext defaultSSHContext = null;
-      if (!getRuntimeJobManager(programOptions, programRunId).isPresent()) {
-        defaultSSHContext = new DefaultSSHContext(Networks.getAddress(cConf, Constants.NETWORK_PROXY_ADDRESS),
-                                                  locationFactory.create(taskInfo.getSecureKeysDir()),
-                                                  createSSHKeyPair(taskInfo));
-      }
-      context = createContext(programRunId, taskInfo.getUser(), taskInfo.getProvisionerProperties(), defaultSSHContext);
+      SSHContext sshContext = new DefaultSSHContext(Networks.getAddress(cConf, Constants.NETWORK_PROXY_ADDRESS),
+                                                    locationFactory.create(taskInfo.getSecureKeysDir()),
+                                                    createSSHKeyPair(taskInfo));
+      context = createContext(programRunId, taskInfo.getUser(), taskInfo.getProvisionerProperties(), sshContext);
     } catch (IOException e) {
       runWithProgramLogging(taskInfo.getProgramRunId(), systemArgs,
                             () -> LOG.error("Failed to load ssh key. The run will be marked as failed.", e));
@@ -613,15 +611,11 @@ public class ProvisioningService extends AbstractIdleService {
     }
 
     ProgramRunId programRunId = taskInfo.getProgramRunId();
-    ProgramOptions programOptions = taskInfo.getProgramOptions();
     Map<String, String> systemArgs = taskInfo.getProgramOptions().getArguments().asMap();
     try {
-      DefaultSSHContext defaultSSHContext = null;
-      if (!getRuntimeJobManager(programOptions, programRunId).isPresent()) {
-        defaultSSHContext = new DefaultSSHContext(Networks.getAddress(cConf, Constants.NETWORK_PROXY_ADDRESS),
-                                                  null, sshKeyPair);
-      }
-      context = createContext(programRunId, taskInfo.getUser(), properties, defaultSSHContext);
+      SSHContext sshContext = new DefaultSSHContext(Networks.getAddress(cConf, Constants.NETWORK_PROXY_ADDRESS),
+                                                    null, sshKeyPair);
+      context = createContext(programRunId, taskInfo.getUser(), properties, sshContext);
     } catch (InvalidMacroException e) {
       runWithProgramLogging(programRunId, systemArgs,
                             () -> LOG.error("Could not evaluate macros while deprovisoning. "
@@ -733,7 +727,7 @@ public class ProvisioningService extends AbstractIdleService {
   private ProvisionerContext createContext(ProgramRunId programRunId, String userId, Map<String, String> properties,
                                            @Nullable SSHContext sshContext) {
     Map<String, String> evaluated = evaluateMacros(secureStore, userId, programRunId.getNamespace(), properties);
-    return new DefaultProvisionerContext(programRunId, evaluated, sparkCompat, sshContext);
+    return new DefaultProvisionerContext(programRunId, evaluated, sparkCompat, sshContext, locationFactory);
   }
 
   /**
