@@ -342,8 +342,6 @@ final class DataprocClient implements AutoCloseable {
       }
 
       //Check if ClusterMetaData is provided and add them.
-      //Map<String, String> clusterMetadata = conf.getClusterMetaData();
-      //clusterMetadata.forEach((key, value) -> metadata.merge(key, value, (v1, v2) -> v2));
       metadata.putAll(conf.getClusterMetaData());
 
       GceClusterConfig.Builder clusterConfig = GceClusterConfig.newBuilder()
