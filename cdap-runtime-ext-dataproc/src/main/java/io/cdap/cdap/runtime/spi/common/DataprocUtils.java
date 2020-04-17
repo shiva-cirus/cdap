@@ -25,6 +25,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
+import javax.annotation.Nullable;
 
 /**
  * This class contains common methods that are needed by DataprocProvisioner and DataprocRuntimeJobManager.
@@ -84,7 +85,7 @@ public final class DataprocUtils {
    * @param keyValueDelimiter Delimiter between key and value.
    * @return Map of Key value pairs parsed from input configValue using the delimiters.
    */
-  public static Map<String, String> parseKeyValueConfig(String configValue, String delimiter,
+  public static Map<String, String> parseKeyValueConfig(@Nullable String configValue, String delimiter,
                                                         String keyValueDelimiter) throws IllegalArgumentException {
     Map<String, String> map = new HashMap<>();
     if (configValue == null) {
